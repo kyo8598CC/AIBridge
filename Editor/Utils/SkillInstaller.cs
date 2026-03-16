@@ -211,11 +211,43 @@ namespace AIBridge.Editor
         }
 
         /// <summary>
-        /// Get the Unity project root directory
+        /// Get the Unity project root directory.
+        /// Attempts to find the actual repository root (with .git/.svn) if Unity is in a subdirectory.
         /// </summary>
         private static string GetProjectRoot()
         {
-            return Path.GetDirectoryName(Application.dataPath);
+            var unityProjectRoot = Path.GetDirectoryName(Application.dataPath);
+
+            // Check if Unity project itself is the repo root
+            if (IsRepositoryRoot(unityProjectRoot))
+            {
+                return unityProjectRoot;
+            }
+
+            // Check parent directory (common case: repo/Unity/)
+            var parentDir = Directory.GetParent(unityProjectRoot)?.FullName;
+            if (parentDir != null && IsRepositoryRoot(parentDir))
+            {
+                return parentDir;
+            }
+
+            // Fallback to Unity project root
+            return unityProjectRoot;
+        }
+
+        /// <summary>
+        /// Check if a directory is a repository root (contains .git, .svn, or CLAUDE.md)
+        /// </summary>
+        private static bool IsRepositoryRoot(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+            {
+                return false;
+            }
+
+            return Directory.Exists(Path.Combine(path, ".git")) ||
+                   Directory.Exists(Path.Combine(path, ".svn")) ||
+                   File.Exists(Path.Combine(path, "CLAUDE.md"));
         }
 
         /// <summary>
