@@ -1,5 +1,5 @@
 ---
-description: "AI Bridge Unity integration - File-based communication framework for AI to control Unity Editor. Send commands via JSON files, manipulate GameObjects, Transforms, Components, Scenes, Prefabs, and more. Supports multi-command execution and runtime extension."
+description: "AI Bridge Unity integration - File-based communication framework for AI to control Unity Editor. Send commands via JSON files, manipulate GameObjects, Transforms, Components, Scenes, Prefabs, and more. Supports ET framework hotfix DLL compilation (equivalent to F6). Supports multi-command execution and runtime extension."
 ---
 
 # AI Bridge Unity Skill
@@ -19,6 +19,7 @@ Activate this skill when you need to:
 - **Bring Unity Editor window to foreground** (triggers auto-refresh/compile)
 - **Capture screenshots or record animated GIFs** (requires Play Mode)
 - **Execute multiple commands efficiently** (use `multi` command)
+- **编译客户端 / 编译热更 / 编译HotfixDLL / F6编译** → use `compile et_hotfix`
 
 ---
 
@@ -215,7 +216,46 @@ AIBridgeCLI.exe compile dotnet --raw
 - `compile dotnet` runs independently without Unity, has intelligent error filtering
 - Use `compile start` and `compile status` for low-level manual compilation control
 
-### 2. `gameobject` - GameObject Operations
+### 1.2 `compile et_hotfix` - ET Framework Hotfix DLL Compilation
+
+**TRIGGER**: Use this when user says any of:
+- 「编译客户端」「编译热更」「编译一下」「帮我编译」「F6」「build hotfix」「compile client」
+
+This compiles ET framework HybridCLR hotfix DLLs — equivalent to pressing **F6** in Unity Editor.
+It runs the full pipeline: asmdef setup → `PlayerBuildInterface.CompilePlayerScripts` → XOR encode → copy to `Assets/Bundles/Code/`.
+
+**Requires**: `MCPBridgeCommand.cs` present in `Assets/Scripts/Editor/Assembly/` of the Unity project.
+
+```bash
+# ET 热更 DLL 编译（等同于 F6）
+# CLI path auto-set by AIBridge after Unity opens
+AIBridgeCache/CLI/AIBridgeCLI.exe compile et_hotfix --timeout 300000 --raw
+```
+
+**Response fields:**
+
+| Field | Description |
+|-------|-------------|
+| `success` | `true` = DLL files updated; `false` = compile failed |
+| `duration` | Compile time in seconds (typically 30–120s) |
+| `errorCount` | Number of compile errors captured from Unity log |
+| `warningCount` | Number of warnings |
+| `errors` | Array of error log strings (when `errorCount > 0`) |
+| `exception` | Exception message if the process threw (rare) |
+
+**Success example:**
+```json
+{"success":true,"duration":45.20,"errorCount":0,"warningCount":3}
+```
+
+**Failure example:**
+```json
+{"success":false,"duration":12.50,"errorCount":2,"warningCount":1,"errors":["Assets/Scripts/Hotfix/...: error CS0103: ..."]}
+```
+
+**NOTE**: This command is synchronous and blocking — Unity Editor will be unresponsive during compilation. Use `--timeout 300000` (5 min) for large projects.
+
+
 
 ```bash
 # Create
