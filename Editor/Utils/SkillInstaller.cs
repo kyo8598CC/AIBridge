@@ -64,7 +64,8 @@ namespace AIBridge.Editor
             try
             {
                 var projectRoot = GetProjectRoot();
-                CopyCliToCacheIfNeeded(projectRoot);
+                var unityProjectRoot = Path.GetDirectoryName(Application.dataPath);
+                CopyCliToCacheIfNeeded(unityProjectRoot);  // CLI always in Unity project directory
                 var results = InstallAssistantIntegrations(projectRoot);
                 LogResults(results);
             }
@@ -423,7 +424,8 @@ namespace AIBridge.Editor
             try
             {
                 var projectRoot = GetProjectRoot();
-                CopyCliToCacheIfNeeded(projectRoot);
+                var unityProjectRoot = Path.GetDirectoryName(Application.dataPath);
+                CopyCliToCacheIfNeeded(unityProjectRoot);  // CLI always in Unity project directory
                 var results = InstallAssistantIntegrations(projectRoot);
                 LogResults(results);
                 EditorUtility.DisplayDialog("AIBridge", BuildManualInstallSummary(results), "OK");

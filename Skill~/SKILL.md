@@ -33,7 +33,7 @@ Activate this skill when you need to:
 AIBridgeCache/CLI/AIBridgeCLI.exe
 ```
 
-> **Note**: The CLI is automatically copied to `AIBridgeCache/CLI/` when the package is installed. This provides a stable, fixed path regardless of how the package was installed (local, git, or registry).
+> **Note**: The CLI is automatically copied to `AIBridgeCache/CLI/` in the Unity project directory when the package is installed. For projects where Unity is in a subdirectory (e.g., `ProjectRoot/Unity/`), the full path would be `Unity/AIBridgeCache/CLI/AIBridgeCLI.exe` relative to the project root.
 
 ### Cross-Platform Support
 
@@ -228,7 +228,7 @@ It runs the full pipeline: asmdef setup → `PlayerBuildInterface.CompilePlayerS
 
 ```bash
 # ET 热更 DLL 编译（等同于 F6）
-# CLI path auto-set by AIBridge after Unity opens
+# For nested Unity projects (e.g., ProjectRoot/Unity/), use: Unity/AIBridgeCache/CLI/AIBridgeCLI.exe
 AIBridgeCache/CLI/AIBridgeCLI.exe compile et_hotfix --timeout 300000 --raw
 ```
 
