@@ -13,6 +13,7 @@ AI 编码助手与 Unity Editor 之间的文件通信框架。
 - **Prefab** - 实例化、保存、解包、应用覆盖
 - **Asset** - 搜索、导入、刷新、按过滤器查找
 - **编辑器控制** - 编译、撤销/重做、播放模式、聚焦窗口
+- **ET框架集成** - HybridCLR 热更 DLL 编译（等同于 F6 快捷键）
 - **截图 & GIF** - 捕获游戏视图、录制动画 GIF
 - **批量命令** - 高效执行多个命令
 - **运行时扩展** - Play 模式自定义处理器
@@ -149,7 +150,7 @@ AIBridgeCLI screenshot gif --frameCount 60 --fps 20 --startDelay 0.5
 | 命令 | 描述 |
 |------|------|
 | `editor` | 编辑器操作（日志、撤销、重做、播放模式等） |
-| `compile` | 编译操作（unity、dotnet） |
+| `compile` | 编译操作（unity、dotnet、**et_hotfix**） |
 | `gameobject` | GameObject 操作（创建、销毁、查找等） |
 | `transform` | Transform 操作（位置、旋转、缩放、父级） |
 | `inspector` | Component/Inspector 操作 |
@@ -239,6 +240,87 @@ AIBridgeRuntime.Instance.RegisterHandler(new MyCustomHandler());
     },
     "executionTime": 15
 }
+```
+
+## ET 框架集成
+
+AI Bridge 为 [ET 框架](https://github.com/egametang/ET) 项目提供专用的热更 DLL 编译命令，等同于 Unity Editor 中的 **F6** 快捷键。
+
+与标准的 `compile unity` 命令（触发 Unity 增量脚本编译）不同，`compile et_hotfix` 执行完整的 ET 热更 DLL 构建流程：
+
+1. 刷新 AssetDatabase
+2. 根据 `CodeMode`（Client / Server / ClientServer）配置 asmdef 文件
+3. 通过 `PlayerBuildInterface.CompilePlayerScripts` 编译脚本到 `Temp/Bin/Debug/`
+4. XOR 编码输出的 DLL
+5. 复制到 `Assets/Bundles/Code/`
+
+### 安装步骤
+
+**第一步**：将 `MCPBridgeCommand.cs` 复制到你的 Unity 项目中：
+
+```
+Assets/Scripts/Editor/Assembly/MCPBridgeCommand.cs
+```
+
+来源：[`Templates~/ET/MCPBridgeCommand.cs`](./Templates~/ET/MCPBridgeCommand.cs)
+
+> 此文件**不会自动安装**，需要手动复制一次到 ET 项目中。
+
+**第二步**：按照 [安装](#安装) 章节将 AI Bridge 安装为 Unity 包。
+
+**第三步**：打开 Unity，CLI 工具会自动复制到 `AIBridgeCache/CLI/`。
+
+### 使用方法
+
+```bash
+# 编译 ET 热更 DLL（等同于 Unity Editor 中按 F6）
+# --timeout 300000 = 5分钟，根据项目大小调整
+AIBridgeCache/CLI/AIBridgeCLI.exe compile et_hotfix --timeout 300000 --raw
+```
+
+**编译成功返回：**
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "duration": 45.20,
+    "errorCount": 0,
+    "warningCount": 3
+  }
+}
+```
+
+**编译失败返回：**
+```json
+{
+  "success": false,
+  "error": "ET hotfix compile failed with 2 error(s). Check Unity console for details.",
+  "data": {
+    "success": false,
+    "duration": 12.50,
+    "errorCount": 2,
+    "warningCount": 1,
+    "errors": [
+      "Assets/Scripts/Hotfix/...: error CS0103: The name 'xxx' does not exist"
+    ]
+  }
+}
+```
+
+### 工作原理
+
+`CompileCommand`（AIBridge）通过反射在 `Unity.Editor` 程序集中查找并调用 `ET.MCPBridgeCommand.CompileHotfix()`，从而避免 AIBridge 与 ET 项目之间产生直接的程序集依赖。
+
+```
+AIBridgeCLI.exe compile et_hotfix
+    → CompileCommand.RunETHotfixCompile()                    [AIBridge]
+        → 反射：ET.MCPBridgeCommand.CompileHotfix()          [Unity.Editor]
+            → AssemblyTool.DoCompile()                       [ET 项目]
+                → PlayerBuildInterface.CompilePlayerScripts()
+                → XOR 编码 + 复制到 Assets/Bundles/Code/
+            → 返回 JSON 结果字符串
+        → 解析 JSON → CommandResult
 ```
 
 ## 许可证

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
@@ -38,8 +39,10 @@ namespace AIBridge.Editor
                         return GetCompilationStatus(request);
                     case "dotnet":
                         return RunDotnetBuild(request);
+                    case "et_hotfix":
+                        return RunETHotfixCompile(request);
                     default:
-                        return CommandResult.Failure(request.id, $"Unknown action: {action}. Supported: start, status, dotnet");
+                        return CommandResult.Failure(request.id, $"Unknown action: {action}. Supported: start, status, dotnet, et_hotfix");
                 }
             }
             catch (Exception ex)
@@ -144,6 +147,69 @@ namespace AIBridge.Editor
                     warningCount = result.warningCount,
                     duration = result.durationSeconds
                 });
+            }
+        }
+
+        /// <summary>
+        /// Call ET.MCPBridgeCommand.CompileHotfix() via reflection.
+        /// Requires MCPBridgeCommand.cs to be present in the Unity project (Unity.Editor assembly).
+        /// </summary>
+        private CommandResult RunETHotfixCompile(CommandRequest request)
+        {
+            const string assemblyName = "Unity.Editor";
+            const string typeName = "ET.MCPBridgeCommand";
+            const string methodName = "CompileHotfix";
+
+            // 在已加载的程序集中查找 ET.MCPBridgeCommand
+            Type mcpType = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (asm.GetName().Name != assemblyName) continue;
+                mcpType = asm.GetType(typeName);
+                if (mcpType != null) break;
+            }
+
+            if (mcpType == null)
+                return CommandResult.Failure(request.id,
+                    $"Type '{typeName}' not found in assembly '{assemblyName}'. " +
+                    "Make sure MCPBridgeCommand.cs is installed in the Unity project under Assets/Scripts/Editor/Assembly/.");
+
+            var method = mcpType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static);
+            if (method == null)
+                return CommandResult.Failure(request.id, $"Method '{methodName}' not found in '{typeName}'.");
+
+            string jsonResult;
+            try
+            {
+                jsonResult = (string)method.Invoke(null, null);
+            }
+            catch (TargetInvocationException tie)
+            {
+                return CommandResult.FromException(request.id, tie.InnerException ?? tie);
+            }
+
+            // 解析返回的 JSON，提取 success 字段决定结果类型
+            try
+            {
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonResult);
+                bool compileSuccess = data.ContainsKey("success") && data["success"] is bool b && b;
+
+                if (compileSuccess)
+                    return CommandResult.Success(request.id, data);
+
+                int errorCount = data.ContainsKey("errorCount") ? Convert.ToInt32(data["errorCount"]) : 0;
+                return new CommandResult
+                {
+                    id = request.id,
+                    success = false,
+                    data = data,
+                    error = $"ET hotfix compile failed with {errorCount} error(s). Check Unity console for details."
+                };
+            }
+            catch
+            {
+                // JSON 解析失败时退回到原始字符串
+                return CommandResult.Success(request.id, new { raw = jsonResult });
             }
         }
 

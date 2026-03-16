@@ -13,6 +13,7 @@ File-based communication framework between AI Code assistants and Unity Editor.
 - **Prefab** - Instantiate, save, unpack, apply overrides
 - **Asset** - Search, import, refresh, find by filter
 - **Editor Control** - Compile, undo/redo, play mode, focus window
+- **ET Framework** - HybridCLR hotfix DLL compilation (equivalent to F6 shortcut)
 - **Screenshot & GIF** - Capture game view, record animated GIFs
 - **Batch Commands** - Execute multiple commands efficiently
 - **Runtime Extension** - Custom handlers for Play mode
@@ -148,7 +149,7 @@ AIBridgeCLI screenshot gif --frameCount 60 --fps 20 --startDelay 0.5
 | Command | Description |
 |---------|-------------|
 | `editor` | Editor operations (log, undo, redo, play mode, etc.) |
-| `compile` | Compilation operations (unity, dotnet) |
+| `compile` | Compilation operations (unity, dotnet, **et_hotfix**) |
 | `gameobject` | GameObject operations (create, destroy, find, etc.) |
 | `transform` | Transform operations (position, rotation, scale, parent) |
 | `inspector` | Component/Inspector operations |
@@ -238,6 +239,87 @@ Results are returned in `AIBridgeCache/results/`:
     },
     "executionTime": 15
 }
+```
+
+## ET Framework Integration
+
+AI Bridge supports [ET Framework](https://github.com/egametang/ET) projects with a dedicated hotfix DLL compilation command — equivalent to the **F6** shortcut in Unity Editor.
+
+Unlike the standard `compile unity` command (which triggers Unity's incremental script compilation), `compile et_hotfix` runs the full ET hotfix DLL build pipeline:
+
+1. Refreshes assets
+2. Sets up asmdef files based on `CodeMode` (Client / Server / ClientServer)
+3. Compiles scripts to `Temp/Bin/Debug/` via `PlayerBuildInterface.CompilePlayerScripts`
+4. XOR-encodes the output DLLs
+5. Copies them to `Assets/Bundles/Code/`
+
+### Setup
+
+**Step 1**: Copy `MCPBridgeCommand.cs` into your Unity project:
+
+```
+Assets/Scripts/Editor/Assembly/MCPBridgeCommand.cs
+```
+
+Source: [`Templates~/ET/MCPBridgeCommand.cs`](./Templates~/ET/MCPBridgeCommand.cs)
+
+> This file is NOT auto-installed. Copy it manually once into your ET project.
+
+**Step 2**: Install AI Bridge as a package (see [Installation](#installation)).
+
+**Step 3**: Open Unity — the CLI will be auto-copied to `AIBridgeCache/CLI/`.
+
+### Usage
+
+```bash
+# Compile ET hotfix DLLs (same as F6 in Unity Editor)
+# --timeout 300000 = 5 minutes, adjust based on project size
+AIBridgeCache/CLI/AIBridgeCLI.exe compile et_hotfix --timeout 300000 --raw
+```
+
+**Success response:**
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "duration": 45.20,
+    "errorCount": 0,
+    "warningCount": 3
+  }
+}
+```
+
+**Failure response:**
+```json
+{
+  "success": false,
+  "error": "ET hotfix compile failed with 2 error(s). Check Unity console for details.",
+  "data": {
+    "success": false,
+    "duration": 12.50,
+    "errorCount": 2,
+    "warningCount": 1,
+    "errors": [
+      "Assets/Scripts/Hotfix/...: error CS0103: The name 'xxx' does not exist"
+    ]
+  }
+}
+```
+
+### How It Works
+
+`CompileCommand` (AIBridge) uses reflection to locate and call `ET.MCPBridgeCommand.CompileHotfix()` in the `Unity.Editor` assembly. This avoids any direct assembly dependency between AIBridge and your ET project.
+
+```
+AIBridgeCLI.exe compile et_hotfix
+    → CompileCommand.RunETHotfixCompile()          [AIBridge]
+        → Reflection: ET.MCPBridgeCommand.CompileHotfix()  [Unity.Editor]
+            → AssemblyTool.DoCompile()             [ET project]
+                → PlayerBuildInterface.CompilePlayerScripts()
+                → XOR encode + copy to Assets/Bundles/Code/
+            → Returns JSON result string
+        → Parse JSON → CommandResult
 ```
 
 ## License
