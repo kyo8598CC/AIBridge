@@ -20,25 +20,37 @@ namespace AIBridgeCLI.Core
                 return _exchangeDir;
             }
 
-            // Method 1: Get from environment variable
+            // Method 1: UNITY_PROJECT_ROOT environment variable
             var projectRoot = Environment.GetEnvironmentVariable("UNITY_PROJECT_ROOT");
-
-            // Method 2: Search up from current working directory to find Unity project
-            if (string.IsNullOrEmpty(projectRoot))
+            if (!string.IsNullOrEmpty(projectRoot))
             {
-                projectRoot = FindUnityProjectRoot(Directory.GetCurrentDirectory());
-            }
-
-            // Method 3: Fallback to exe directory relative path (legacy compatibility)
-            if (string.IsNullOrEmpty(projectRoot))
-            {
-                var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                var toolsDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                _exchangeDir = Path.Combine(toolsDir, "Exchange");
+                _exchangeDir = Path.Combine(projectRoot, "AIBridgeCache");
                 return _exchangeDir;
             }
 
-            _exchangeDir = Path.Combine(projectRoot, "AIBridgeCache");
+            // Method 2: Search up from current working directory
+            projectRoot = FindUnityProjectRoot(Directory.GetCurrentDirectory());
+            if (!string.IsNullOrEmpty(projectRoot))
+            {
+                _exchangeDir = Path.Combine(projectRoot, "AIBridgeCache");
+                return _exchangeDir;
+            }
+
+            // Method 3: Detect installed path AIBridgeCache/CLI/AIBridgeCLI.exe
+            // → parent of exe dir is AIBridgeCache itself
+            var exeDir = AppDomain.CurrentDomain.BaseDirectory
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parentDir = Path.GetDirectoryName(exeDir);
+            if (Path.GetFileName(exeDir).Equals("CLI", StringComparison.OrdinalIgnoreCase) &&
+                Path.GetFileName(parentDir ?? string.Empty).Equals("AIBridgeCache", StringComparison.OrdinalIgnoreCase))
+            {
+                _exchangeDir = parentDir;
+                return _exchangeDir;
+            }
+
+            // Method 4: Legacy fallback Tools~/Exchange
+            var toolsDir = Path.GetDirectoryName(exeDir);
+            _exchangeDir = Path.Combine(toolsDir, "Exchange");
             return _exchangeDir;
         }
 
